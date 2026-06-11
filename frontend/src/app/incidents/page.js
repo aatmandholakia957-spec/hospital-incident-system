@@ -6,7 +6,7 @@ import Link from 'next/link';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
-import { DEPARTMENTS, SEVERITIES, STATUSES } from '@/lib/constants';
+import { DEPARTMENTS, SEVERITIES, STATUSES, CATEGORIES } from '@/lib/constants';
 import {
   Search,
   Plus,
@@ -35,6 +35,7 @@ export default function IncidentsList() {
   const [currentPhase, setCurrentPhase] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [category, setCategory] = useState('');
 
   // Table/Pagination States
   const [incidents, setIncidents] = useState([]);
@@ -62,6 +63,7 @@ export default function IncidentsList() {
         ...(currentPhase && { currentPhase }),
         ...(dateFrom && { dateFrom }),
         ...(dateTo && { dateTo }),
+        ...(category && { category }),
       };
 
       const res = await api.get('/api/incidents', params);
@@ -80,7 +82,7 @@ export default function IncidentsList() {
     } finally {
       setLoading(false);
     }
-  }, [pagination.page, pagination.limit, sortBy, sortOrder, search, department, severity, status, currentPhase, dateFrom, dateTo]);
+  }, [pagination.page, pagination.limit, sortBy, sortOrder, search, department, severity, status, currentPhase, dateFrom, dateTo, category]);
 
   useEffect(() => {
     if (user?.role === 'dept_head') {
@@ -90,7 +92,7 @@ export default function IncidentsList() {
 
   useEffect(() => {
     fetchIncidents();
-  }, [pagination.page, sortBy, sortOrder, department, severity, status, currentPhase]);
+  }, [pagination.page, sortBy, sortOrder, department, severity, status, currentPhase, dateFrom, dateTo, category]);
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
@@ -106,6 +108,7 @@ export default function IncidentsList() {
     setCurrentPhase('');
     setDateFrom('');
     setDateTo('');
+    setCategory('');
     setPagination(p => ({ ...p, page: 1 }));
     // Wait for state updates to trigger fetch through dependency
     setTimeout(fetchIncidents, 0);
@@ -148,6 +151,7 @@ export default function IncidentsList() {
         ...(status && { status }),
         ...(dateFrom && { dateFrom }),
         ...(dateTo && { dateTo }),
+        ...(category && { category }),
       };
 
       const blob = await api.getBlob('/api/export/excel', params);
@@ -288,6 +292,23 @@ export default function IncidentsList() {
               onChange={(e) => setDateTo(e.target.value)}
               className="form-input form-input--light"
             />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Category</label>
+            <select
+              value={category}
+              onChange={(e) => {
+                setCategory(e.target.value);
+                setPagination(p => ({ ...p, page: 1 }));
+              }}
+              className="form-select--light"
+            >
+              <option value="">All Categories</option>
+              {CATEGORIES.map((cat) => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
           </div>
 
           <div className="form-group" style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-end', gap: '8px' }}>

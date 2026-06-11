@@ -7,13 +7,14 @@ const { logAction } = require('../utils/auditLogger');
 // @access  Private (admin, dept_head)
 exports.exportExcel = async (req, res, next) => {
   try {
-    const { department, severity, status, dateFrom, dateTo } = req.query;
+    const { department, severity, status, dateFrom, dateTo, category } = req.query;
 
     const query = { isDeleted: false };
     if (req.user.role === 'dept_head') query.department = req.user.department;
     else if (department) query.department = department;
     if (severity) query.severity = severity;
     if (status) query.status = status;
+    if (category) query.category = category;
     if (dateFrom || dateTo) {
       query.dateTime = {};
       if (dateFrom) query.dateTime.$gte = new Date(dateFrom);

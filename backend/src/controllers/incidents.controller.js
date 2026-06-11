@@ -34,7 +34,7 @@ const checkCapaClosureBlock = (incident, updateBody) => {
 exports.getIncidents = async (req, res, next) => {
   try {
     const {
-      department, severity, status, dateFrom, dateTo,
+      department, severity, status, dateFrom, dateTo, category,
       search, page = 1, limit = 20, sortBy = 'dateTime', sortOrder = 'desc',
     } = req.query;
 
@@ -49,6 +49,7 @@ exports.getIncidents = async (req, res, next) => {
 
     if (severity) query.severity = severity;
     if (status) query.status = status;
+    if (category) query.category = category;
     if (req.query.currentPhase) query.currentPhase = Number(req.query.currentPhase);
 
     if (dateFrom || dateTo) {

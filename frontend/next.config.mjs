@@ -1,14 +1,16 @@
+const backendUrl = process.env.BACKEND_URL || 'http://localhost:5005';
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   async rewrites() {
     return [
       {
         source: '/api/:path*',
-        destination: 'http://localhost:5005/api/:path*',
+        destination: `${backendUrl}/api/:path*`,
       },
       {
         source: '/health',
-        destination: 'http://localhost:5005/health',
+        destination: `${backendUrl}/health`,
       },
     ];
   },

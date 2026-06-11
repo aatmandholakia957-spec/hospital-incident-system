@@ -1,5 +1,4 @@
 const mongoose = require('mongoose');
-const { MongoMemoryServer } = require('mongodb-memory-server');
 
 let mongoServer;
 
@@ -404,6 +403,7 @@ const connectDB = async () => {
     console.warn(`⚠️  Atlas connection failed (${error.message}).`);
     console.warn('🚀 Spinning up local offline In-Memory MongoDB Server...');
     try {
+      const { MongoMemoryServer } = require('mongodb-memory-server');
       const path = require('path');
       const fs = require('fs');
       const dbPath = path.resolve(__dirname, '../../../local-db-data');
