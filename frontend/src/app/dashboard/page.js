@@ -43,6 +43,11 @@ export default function Dashboard() {
   const [recentIncidents, setRecentIncidents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const SEVERITY_COLORS = {
     Critical: '#dc2626',
@@ -164,6 +169,44 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* CAPA Status Registry Row */}
+      <h3 style={{ fontSize: '15px', fontWeight: '700', color: 'var(--color-navy-900)', marginTop: '24px', marginBottom: '12px' }}>
+        Corrective & Preventive Action (CAPA) Metrics
+      </h3>
+      <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', marginBottom: '24px' }}>
+        <div className="stat-card animate-fadeIn">
+          <div className="stat-card-icon" style={{ background: 'rgba(59, 130, 246, 0.1)', color: 'var(--color-primary-600)' }}>
+            <Clock size={24} />
+          </div>
+          <div className="stat-card-content">
+            <span className="stat-card-label">Pending CAPAs</span>
+            <span className="stat-card-value">{summary?.capaStats?.pending || 0}</span>
+          </div>
+        </div>
+
+        <div className="stat-card animate-fadeIn" style={{ borderLeft: '4px solid var(--color-danger)' }}>
+          <div className="stat-card-icon" style={{ background: 'rgba(220, 38, 38, 0.1)', color: 'var(--color-danger)' }}>
+            <ShieldAlert size={24} />
+          </div>
+          <div className="stat-card-content">
+            <span className="stat-card-label">Overdue CAPAs</span>
+            <span className="stat-card-value" style={{ color: (summary?.capaStats?.overdue || 0) > 0 ? 'var(--color-danger)' : 'inherit' }}>
+              {summary?.capaStats?.overdue || 0}
+            </span>
+          </div>
+        </div>
+
+        <div className="stat-card animate-fadeIn" style={{ borderLeft: '4px solid var(--color-success)' }}>
+          <div className="stat-card-icon" style={{ background: 'rgba(16, 185, 129, 0.1)', color: 'var(--color-success)' }}>
+            <CheckCircle2 size={24} />
+          </div>
+          <div className="stat-card-content">
+            <span className="stat-card-label">Completed CAPAs</span>
+            <span className="stat-card-value">{summary?.capaStats?.completed || 0}</span>
+          </div>
+        </div>
+      </div>
+
       {/* Charts Grid */}
       <div className="grid grid-2" style={{ marginTop: '24px' }}>
         {/* Trend Area Chart */}
@@ -173,7 +216,7 @@ export default function Dashboard() {
             <h3 className="card-title" style={{ margin: 0 }}>Incident Trends (12 Months)</h3>
           </div>
           <div style={{ height: '300px' }}>
-            {trendData.length > 0 ? (
+            {mounted && trendData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={trendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <defs>
@@ -195,6 +238,10 @@ export default function Dashboard() {
                   <Area type="monotone" name="Critical" dataKey="critical" stroke="#dc2626" fillOpacity={1} fill="url(#criticalColor)" strokeWidth={2} />
                 </AreaChart>
               </ResponsiveContainer>
+            ) : !mounted ? (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--color-gray-400)' }}>
+                Loading chart metrics...
+              </div>
             ) : (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--color-gray-400)' }}>
                 No trend data recorded.
@@ -210,7 +257,7 @@ export default function Dashboard() {
             <div className="card" style={{ padding: '20px', display: 'flex', flexDirection: 'column' }}>
               <h3 className="card-title" style={{ marginBottom: '16px' }}>Severity Distribution</h3>
               <div style={{ flex: 1, height: '160px', position: 'relative' }}>
-                {severityData.length > 0 ? (
+                {mounted && severityData.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
@@ -230,6 +277,10 @@ export default function Dashboard() {
                       <Tooltip formatter={(value) => [`${value} incidents`, 'Count']} />
                     </PieChart>
                   </ResponsiveContainer>
+                ) : !mounted ? (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--color-gray-400)', fontSize: '12px' }}>
+                    Loading...
+                  </div>
                 ) : (
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--color-gray-400)', fontSize: '13px' }}>
                     No incident data
@@ -332,6 +383,7 @@ export default function Dashboard() {
                 <th>Severity</th>
                 <th>Status</th>
                 <th>Reported By</th>
+                <th style={{ textAlign: 'center' }}>CAPA Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -361,6 +413,15 @@ export default function Dashboard() {
                     </span>
                   </td>
                   <td>{incident.reportedBy?.name || incident.reportedBy || 'Unknown'}</td>
+                  <td style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                    <Link
+                      href={`/incidents/${incident._id}?tab=capa`}
+                      className="btn btn-secondary btn-sm"
+                      style={{ fontSize: '11px', padding: '4px 8px' }}
+                    >
+                      Track CAPA
+                    </Link>
+                  </td>
                 </tr>
               ))}
               {recentIncidents.length === 0 && (

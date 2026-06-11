@@ -413,6 +413,14 @@ export default function IncidentsList() {
                         >
                           <Eye size={15} />
                         </button>
+                        <Link
+                          href={`/incidents/${incident._id}?tab=capa`}
+                          className="btn btn-ghost btn-sm btn-icon"
+                          title="Track CAPA"
+                          style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                        >
+                          <FileSpreadsheet size={15} color="var(--color-success)" />
+                        </Link>
                         {hasRole('admin', 'dept_head') && (
                           <button
                             onClick={() => router.push(`/incidents/${incident._id}/edit`)}

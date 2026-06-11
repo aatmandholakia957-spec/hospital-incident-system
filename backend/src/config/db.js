@@ -223,6 +223,112 @@ const autoSeed = async () => {
         const reportedByName = getRandom(names);
         const reportedByPhone = `+1 (555) 01${String(Math.floor(Math.random() * 90) + 10)}`;
 
+        let investigations = [];
+        let correctiveActions = [];
+        let preventiveActions = [];
+
+        if (status === 'Closed') {
+          investigations = [
+            {
+              text: 'Conducted initial inquiry and interviewed the nurse on shift. Found that procedural guidelines were not fully followed due to heavy workload.',
+              date: new Date(incidentDate.getTime() + 3600000 * 2),
+              user: 'Quality Head',
+            },
+            {
+              text: 'Equipment inspection carried out. Minor repair needed and training required on the new device.',
+              date: new Date(incidentDate.getTime() + 3600000 * 24),
+              user: 'Dr. Priya Patel',
+            }
+          ];
+          correctiveActions = [
+            {
+              description: 'Staff retraining on procedure completed.',
+              responsiblePerson: getRandom(names),
+              targetDate: new Date(incidentDate.getTime() + 86400000 * 3),
+              status: 'Completed',
+              completionDate: new Date(incidentDate.getTime() + 86400000 * 3),
+              remarks: 'Retraining documented in training logs.',
+              isMandatory: true,
+            },
+            {
+              description: 'Device serviced and certified safe.',
+              responsiblePerson: getRandom(names),
+              targetDate: new Date(incidentDate.getTime() + 86400000 * 2),
+              status: 'Completed',
+              completionDate: new Date(incidentDate.getTime() + 86400000 * 2),
+              remarks: 'Vendor service certification attached.',
+              isMandatory: true,
+            }
+          ];
+          preventiveActions = [
+            {
+              description: 'New SOP implemented for night shift operations.',
+              responsiblePerson: getRandom(names),
+              targetDate: new Date(incidentDate.getTime() + 86400000 * 10),
+              status: 'Completed',
+              completionDate: new Date(incidentDate.getTime() + 86400000 * 9),
+              remarks: 'SOP published on hospital intranet.',
+              isMandatory: true,
+            },
+            {
+              description: 'Monthly audit schedule set up.',
+              responsiblePerson: getRandom(names),
+              targetDate: new Date(incidentDate.getTime() + 86400000 * 14),
+              status: 'Completed',
+              completionDate: new Date(incidentDate.getTime() + 86400000 * 12),
+              remarks: 'First audit completed successfully.',
+              isMandatory: false,
+            }
+          ];
+        } else if (status === 'Pending') {
+          investigations = [
+            {
+              text: 'Interviewed staff involved. Heavy patient inflow was noted during the event. Equipment inspection is pending.',
+              date: new Date(incidentDate.getTime() + 3600000 * 2),
+              user: 'Dr. Sarah Johnson',
+            }
+          ];
+          correctiveActions = [
+            {
+              description: 'Immediate staff briefing on safety protocols.',
+              responsiblePerson: getRandom(names),
+              targetDate: new Date(incidentDate.getTime() + 86400000 * 2),
+              status: 'Completed',
+              completionDate: new Date(incidentDate.getTime() + 86400000 * 1),
+              remarks: 'Briefing conducted by shift supervisor.',
+              isMandatory: true,
+            },
+            {
+              description: 'Equipment repair / replacement setup.',
+              responsiblePerson: getRandom(names),
+              targetDate: new Date(incidentDate.getTime() - 86400000 * 3), // Overdue if created days ago
+              status: 'In Progress',
+              remarks: 'Awaiting vendor parts.',
+              isMandatory: true,
+            }
+          ];
+          preventiveActions = [
+            {
+              description: 'Review SOP and training log compliance.',
+              responsiblePerson: getRandom(names),
+              targetDate: new Date(incidentDate.getTime() + 86400000 * 15),
+              status: 'Pending',
+              isMandatory: true,
+            }
+          ];
+        } else {
+          // Open
+          correctiveActions = [
+            {
+              description: 'Review incident details and assign investigator.',
+              responsiblePerson: getRandom(names),
+              targetDate: new Date(incidentDate.getTime() + 86400000 * 2),
+              status: 'Pending',
+              isMandatory: true,
+            }
+          ];
+        }
+
         const incident = new Incident({
           dateTime: incidentDate,
           department,
@@ -247,6 +353,10 @@ const autoSeed = async () => {
           remarks: status === 'Closed' ? 'Incident resolved and documented. Follow-up completed.' : '',
           createdBy: getRandom(staffUsers)._id,
           isDeleted: false,
+          investigations,
+          correctiveActions,
+          preventiveActions,
+          capaBypassApproved: false,
         });
 
         await incident.save();
@@ -318,6 +428,27 @@ const connectDB = async () => {
       console.error(`❌  Local MongoDB setup failed: ${localError.message}`);
       process.exit(1);
     }
+  }
+
+  // Run migration check for legacy incidents
+  try {
+    const Incident = require('../models/Incident');
+    const result = await Incident.updateMany(
+      { correctiveActions: { $exists: false } },
+      {
+        $set: {
+          investigations: [],
+          correctiveActions: [],
+          preventiveActions: [],
+          capaBypassApproved: false,
+        }
+      }
+    );
+    if (result.modifiedCount > 0) {
+      console.log(`🧹 Migrated ${result.modifiedCount} legacy incident records with new CAPA/investigation fields.`);
+    }
+  } catch (migErr) {
+    console.error('⚠️ Startup migration failed:', migErr);
   }
 
   // Start background reminder service

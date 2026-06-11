@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import {
   LayoutDashboard, AlertTriangle, PlusCircle, BarChart3,
-  Bell, Users, FileText, LogOut, X, Shield, BookOpen
+  Bell, Users, FileText, LogOut, X, Shield, BookOpen, ClipboardCheck
 } from 'lucide-react';
 
 const navItems = [
@@ -14,6 +14,7 @@ const navItems = [
     { href: '/incidents', label: 'All Incidents', icon: AlertTriangle },
     { href: '/incidents/new', label: 'Report Incident', icon: PlusCircle, roles: ['admin', 'dept_head', 'staff'] },
     { href: '/training-logs', label: 'Training Logs', icon: BookOpen },
+    { href: '/investigations-capa', label: 'Investigation & CAPA', icon: ClipboardCheck },
     { href: '/analytics', label: 'Analytics', icon: BarChart3 },
   ]},
   { section: 'Communication', items: [

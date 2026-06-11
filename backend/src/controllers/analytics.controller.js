@@ -8,15 +8,49 @@ exports.getSummary = async (req, res, next) => {
     const baseQuery = { isDeleted: false };
     if (req.user.role === 'dept_head') baseQuery.department = req.user.department;
 
-    const [total, open, closed, pending, critical] = await Promise.all([
+    const [total, open, closed, pending, critical, allIncidents] = await Promise.all([
       Incident.countDocuments(baseQuery),
       Incident.countDocuments({ ...baseQuery, status: 'Open' }),
       Incident.countDocuments({ ...baseQuery, status: 'Closed' }),
       Incident.countDocuments({ ...baseQuery, status: 'Pending' }),
       Incident.countDocuments({ ...baseQuery, severity: 'Critical', status: { $ne: 'Closed' } }),
+      Incident.find(baseQuery, 'correctiveActions preventiveActions'),
     ]);
 
-    res.json({ success: true, data: { total, open, closed, pending, critical } });
+    let pendingCapas = 0;
+    let completedCapas = 0;
+    let overdueCapas = 0;
+    const now = new Date();
+
+    allIncidents.forEach((inc) => {
+      const actions = [...(inc.correctiveActions || []), ...(inc.preventiveActions || [])];
+      actions.forEach((act) => {
+        if (act.status === 'Completed') {
+          completedCapas++;
+        } else {
+          pendingCapas++;
+          if (act.targetDate && new Date(act.targetDate) < now) {
+            overdueCapas++;
+          }
+        }
+      });
+    });
+
+    res.json({
+      success: true,
+      data: {
+        total,
+        open,
+        closed,
+        pending,
+        critical,
+        capaStats: {
+          pending: pendingCapas,
+          completed: completedCapas,
+          overdue: overdueCapas,
+        },
+      },
+    });
   } catch (error) {
     next(error);
   }

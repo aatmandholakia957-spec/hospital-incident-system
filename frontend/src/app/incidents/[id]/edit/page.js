@@ -86,6 +86,13 @@ export default function EditIncident() {
   const [toast, setToast] = useState(null);
   const [errors, setErrors] = useState({});
 
+  // New Investigation and CAPA fields
+  const [localCorrectiveActions, setLocalCorrectiveActions] = useState([]);
+  const [localPreventiveActions, setLocalPreventiveActions] = useState([]);
+  const [localInvestigations, setLocalInvestigations] = useState([]);
+  const [newInvestigationText, setNewInvestigationText] = useState('');
+  const [capaBypassApproved, setCapaBypassApproved] = useState(false);
+
   // Sync Severity with Category (Gradation)
   useEffect(() => {
     if (category === 'Minor') setSeverity('Low');
@@ -187,6 +194,10 @@ export default function EditIncident() {
         setNoticeDetails(incident.noticeDetails || '');
         setCurrentPhase(incident.currentPhase || 1);
         setChecklist(incident.checklist || {});
+        setLocalCorrectiveActions(incident.correctiveActions || []);
+        setLocalPreventiveActions(incident.preventiveActions || []);
+        setLocalInvestigations(incident.investigations || []);
+        setCapaBypassApproved(incident.capaBypassApproved || false);
       }
     } catch (err) {
       console.error(err);
@@ -201,6 +212,72 @@ export default function EditIncident() {
   }, [fetchIncident]);
 
   const canEditSheet2 = hasRole('admin', 'dept_head');
+
+  const handleAddLocalAction = (type) => {
+    const newAction = {
+      description: '',
+      responsiblePerson: '',
+      targetDate: '',
+      status: 'Pending',
+      completionDate: '',
+      remarks: '',
+      isMandatory: true,
+    };
+    if (type === 'CA') {
+      setLocalCorrectiveActions([...localCorrectiveActions, newAction]);
+    } else {
+      setLocalPreventiveActions([...localPreventiveActions, newAction]);
+    }
+  };
+
+  const handleRemoveLocalAction = (type, index) => {
+    if (type === 'CA') {
+      const copy = [...localCorrectiveActions];
+      copy.splice(index, 1);
+      setLocalCorrectiveActions(copy);
+    } else {
+      const copy = [...localPreventiveActions];
+      copy.splice(index, 1);
+      setLocalPreventiveActions(copy);
+    }
+  };
+
+  const handleLocalActionChange = (type, index, field, value) => {
+    if (type === 'CA') {
+      const copy = [...localCorrectiveActions];
+      copy[index] = { ...copy[index], [field]: value };
+      
+      if (field === 'status' && value === 'Completed' && !copy[index].completionDate) {
+        copy[index].completionDate = new Date().toISOString().substring(0, 10);
+      } else if (field === 'status' && value !== 'Completed') {
+        copy[index].completionDate = '';
+      }
+      
+      setLocalCorrectiveActions(copy);
+    } else {
+      const copy = [...localPreventiveActions];
+      copy[index] = { ...copy[index], [field]: value };
+      
+      if (field === 'status' && value === 'Completed' && !copy[index].completionDate) {
+        copy[index].completionDate = new Date().toISOString().substring(0, 10);
+      } else if (field === 'status' && value !== 'Completed') {
+        copy[index].completionDate = '';
+      }
+      
+      setLocalPreventiveActions(copy);
+    }
+  };
+
+  const formatDateForInput = (dateVal) => {
+    if (!dateVal) return '';
+    try {
+      const d = new Date(dateVal);
+      if (isNaN(d.getTime())) return '';
+      return d.toISOString().substring(0, 10);
+    } catch (e) {
+      return '';
+    }
+  };
 
   const validateForm = () => {
     const newErrors = {};
@@ -244,6 +321,15 @@ export default function EditIncident() {
 
       // Filter empty root cause inputs
       const activeRootCauses = rootCauses.map(rc => rc.trim()).filter(Boolean);
+
+      const updatedInvestigations = [...localInvestigations];
+      if (newInvestigationText.trim()) {
+        updatedInvestigations.push({
+          text: newInvestigationText.trim(),
+          date: new Date(),
+          user: user?.name || 'Authorized Portal',
+        });
+      }
 
       const checklistUpdate = { ...checklist };
       if (actionTaken.trim()) checklistUpdate.capaFormulated = true;
@@ -318,6 +404,10 @@ export default function EditIncident() {
         status,
         remarks,
         currentPhase: Number(currentPhase),
+        investigations: updatedInvestigations,
+        correctiveActions: localCorrectiveActions,
+        preventiveActions: localPreventiveActions,
+        capaBypassApproved: capaBypassApproved,
       };
 
       const res = await api.put(`/api/incidents/${id}`, payload);
@@ -401,6 +491,26 @@ export default function EditIncident() {
             <Settings size={15} />
             Sheet 2: Investigation & Review
             {!canEditSheet2 && <span style={{ fontSize: '10px', background: 'var(--color-gray-300)', color: 'var(--color-gray-600)', padding: '2px 6px', borderRadius: '4px', marginLeft: '4px' }}>Admin Only</span>}
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('capa')}
+            style={{
+              padding: '8px 16px',
+              borderRadius: '6px',
+              fontSize: '13px',
+              fontWeight: '600',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              background: activeTab === 'capa' ? '#fff' : 'transparent',
+              color: activeTab === 'capa' ? 'var(--color-navy-900)' : 'var(--color-gray-600)',
+              boxShadow: activeTab === 'capa' ? 'var(--shadow-sm)' : 'none',
+              transition: 'all 0.2s ease',
+            }}
+          >
+            <Settings size={15} />
+            Investigation & CAPA
           </button>
         </div>
       </div>
@@ -1017,6 +1127,326 @@ export default function EditIncident() {
                   <span>* ( If needed attach blank Page )</span>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* SHEET 3: INVESTIGATION & CAPA */}
+          {activeTab === 'capa' && (
+            <div className="animate-fadeIn" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+              {/* 1. Investigation Findings Section */}
+              <div style={{ padding: '20px', background: '#f8fafc', border: '1px solid var(--color-gray-200)', borderRadius: '8px' }}>
+                <h3 style={{ fontSize: '15px', fontWeight: '700', color: 'var(--color-navy-900)', borderBottom: '2px solid var(--color-gray-200)', paddingBottom: '8px', marginBottom: '16px' }}>
+                  1. Investigation Findings Log
+                </h3>
+                
+                {/* Previously logged entries */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '20px' }}>
+                  {localInvestigations && localInvestigations.length > 0 ? (
+                    [...localInvestigations].map((inv, idx) => (
+                      <div key={idx} style={{ padding: '12px', background: '#fff', borderLeft: '3px solid #8b5cf6', borderRadius: '4px', boxShadow: 'var(--shadow-sm)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--color-gray-500)', fontWeight: '600', marginBottom: '6px' }}>
+                          <span>BY: {inv.user}</span>
+                          <span>{new Date(inv.date).toLocaleString()}</span>
+                        </div>
+                        <p style={{ margin: 0, fontSize: '13px', color: '#111', whiteSpace: 'pre-wrap', lineHeight: '1.5' }}>
+                          {inv.text}
+                        </p>
+                      </div>
+                    ))
+                  ) : (
+                    <p style={{ fontStyle: 'italic', color: 'var(--color-gray-400)', fontSize: '13px', margin: 0 }}>
+                      No investigation entries recorded yet.
+                    </p>
+                  )}
+                </div>
+
+                {/* Add new entry input */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <label style={{ fontWeight: '700', fontSize: '11px', color: 'var(--color-gray-600)', textTransform: 'uppercase' }}>
+                    Append New Findings / Notes
+                  </label>
+                  <textarea
+                    placeholder="Enter additional investigation observations, root cause analysis details, evidence findings, or interview notes..."
+                    value={newInvestigationText}
+                    onChange={(e) => setNewInvestigationText(e.target.value)}
+                    rows={3}
+                    style={{
+                      width: '100%',
+                      border: '1px solid var(--color-gray-300)',
+                      borderRadius: '6px',
+                      padding: '12px',
+                      fontSize: '13.5px',
+                      outline: 'none',
+                      resize: 'vertical',
+                      background: '#fff',
+                      lineHeight: '1.5'
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* 2. CAPA Actions Section */}
+              <div style={{ padding: '20px', border: '1px solid var(--color-gray-200)', borderRadius: '8px', background: '#fff' }}>
+                <h3 style={{ fontSize: '15px', fontWeight: '700', color: 'var(--color-navy-900)', borderBottom: '2px solid var(--color-gray-200)', paddingBottom: '8px', marginBottom: '16px' }}>
+                  2. Corrective & Preventive Actions (CAPA) Plan
+                </h3>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+                  {/* Corrective Actions */}
+                  <div>
+                    <h4 style={{ fontSize: '13.5px', fontWeight: '700', color: 'var(--color-primary-600)', marginBottom: '12px', display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Corrective Actions (CA)</span>
+                      <span style={{ fontSize: '11px', background: '#eff6ff', color: 'var(--color-primary-600)', padding: '2px 6px', borderRadius: '4px' }}>
+                        Immediate fixes
+                      </span>
+                    </h4>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                      {localCorrectiveActions.map((action, idx) => (
+                        <div key={idx} style={{ padding: '16px', border: '1px solid var(--color-gray-200)', borderRadius: '8px', background: '#f8fafc', position: 'relative' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                            <span style={{ fontWeight: '800', fontSize: '12px', color: 'var(--color-primary-600)' }}>CA{idx + 1}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveLocalAction('CA', idx)}
+                              style={{ background: 'transparent', border: 'none', color: 'var(--color-danger)', fontSize: '11px', cursor: 'pointer', fontWeight: 'bold' }}
+                            >
+                              Delete
+                            </button>
+                          </div>
+
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12px' }}>
+                            <div>
+                              <label style={{ fontWeight: '600', display: 'block', marginBottom: '2px' }}>Action Description *</label>
+                              <input
+                                type="text"
+                                value={action.description}
+                                onChange={(e) => handleLocalActionChange('CA', idx, 'description', e.target.value)}
+                                placeholder="e.g. Repair OT floor tile"
+                                style={{ width: '100%', padding: '6px', border: '1px solid var(--color-gray-300)', borderRadius: '4px', outline: 'none' }}
+                                required
+                              />
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                              <div>
+                                <label style={{ fontWeight: '600', display: 'block', marginBottom: '2px' }}>Responsible</label>
+                                <input
+                                  type="text"
+                                  value={action.responsiblePerson}
+                                  onChange={(e) => handleLocalActionChange('CA', idx, 'responsiblePerson', e.target.value)}
+                                  placeholder="Name"
+                                  style={{ width: '100%', padding: '6px', border: '1px solid var(--color-gray-300)', borderRadius: '4px', outline: 'none' }}
+                                />
+                              </div>
+                              <div>
+                                <label style={{ fontWeight: '600', display: 'block', marginBottom: '2px' }}>Target Date</label>
+                                <input
+                                  type="date"
+                                  value={formatDateForInput(action.targetDate)}
+                                  onChange={(e) => handleLocalActionChange('CA', idx, 'targetDate', e.target.value)}
+                                  style={{ width: '100%', padding: '5px', border: '1px solid var(--color-gray-300)', borderRadius: '4px', outline: 'none' }}
+                                />
+                              </div>
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                              <div>
+                                <label style={{ fontWeight: '600', display: 'block', marginBottom: '2px' }}>Status</label>
+                                <select
+                                  value={action.status}
+                                  onChange={(e) => handleLocalActionChange('CA', idx, 'status', e.target.value)}
+                                  style={{ width: '100%', padding: '6px', border: '1px solid var(--color-gray-300)', borderRadius: '4px', outline: 'none', background: '#fff' }}
+                                >
+                                  <option value="Pending">Pending</option>
+                                  <option value="In Progress">In Progress</option>
+                                  <option value="Completed">Completed</option>
+                                </select>
+                              </div>
+                              <div>
+                                <label style={{ fontWeight: '600', display: 'block', marginBottom: '2px' }}>Completion Date</label>
+                                <input
+                                  type="date"
+                                  disabled={action.status !== 'Completed'}
+                                  value={formatDateForInput(action.completionDate)}
+                                  onChange={(e) => handleLocalActionChange('CA', idx, 'completionDate', e.target.value)}
+                                  style={{ width: '100%', padding: '5px', border: '1px solid var(--color-gray-300)', borderRadius: '4px', outline: 'none', background: action.status === 'Completed' ? '#fff' : '#e2e8f0' }}
+                                />
+                              </div>
+                            </div>
+
+                            <div>
+                              <label style={{ fontWeight: '600', display: 'block', marginBottom: '2px' }}>Remarks</label>
+                              <input
+                                type="text"
+                                value={action.remarks}
+                                onChange={(e) => handleLocalActionChange('CA', idx, 'remarks', e.target.value)}
+                                placeholder="Verification remarks..."
+                                style={{ width: '100%', padding: '6px', border: '1px solid var(--color-gray-300)', borderRadius: '4px', outline: 'none' }}
+                              />
+                            </div>
+
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '600', marginTop: '4px', cursor: 'pointer' }}>
+                              <input
+                                type="checkbox"
+                                checked={action.isMandatory}
+                                onChange={(e) => handleLocalActionChange('CA', idx, 'isMandatory', e.target.checked)}
+                                style={{ width: '14px', height: '14px' }}
+                              />
+                              Mandatory Action (Required for closure)
+                            </label>
+                          </div>
+                        </div>
+                      ))}
+
+                      <button
+                        type="button"
+                        onClick={() => handleAddLocalAction('CA')}
+                        className="btn btn-secondary btn-sm"
+                        style={{ borderStyle: 'dashed', borderWidth: '2px', background: 'transparent' }}
+                      >
+                        + Add New Corrective Action
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Preventive Actions */}
+                  <div>
+                    <h4 style={{ fontSize: '13.5px', fontWeight: '700', color: '#0d9488', marginBottom: '12px', display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Preventive Actions (PA)</span>
+                      <span style={{ fontSize: '11px', background: '#f0fdf4', color: '#0d9488', padding: '2px 6px', borderRadius: '4px' }}>
+                        Prevent recurrence
+                      </span>
+                    </h4>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                      {localPreventiveActions.map((action, idx) => (
+                        <div key={idx} style={{ padding: '16px', border: '1px solid var(--color-gray-200)', borderRadius: '8px', background: '#f8fafc', position: 'relative' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                            <span style={{ fontWeight: '800', fontSize: '12px', color: '#0d9488' }}>PA{idx + 1}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveLocalAction('PA', idx)}
+                              style={{ background: 'transparent', border: 'none', color: 'var(--color-danger)', fontSize: '11px', cursor: 'pointer', fontWeight: 'bold' }}
+                            >
+                              Delete
+                            </button>
+                          </div>
+
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12px' }}>
+                            <div>
+                              <label style={{ fontWeight: '600', display: 'block', marginBottom: '2px' }}>Action Description *</label>
+                              <input
+                                type="text"
+                                value={action.description}
+                                onChange={(e) => handleLocalActionChange('PA', idx, 'description', e.target.value)}
+                                placeholder="e.g. Conduct monthly audits"
+                                style={{ width: '100%', padding: '6px', border: '1px solid var(--color-gray-300)', borderRadius: '4px', outline: 'none' }}
+                                required
+                              />
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                              <div>
+                                <label style={{ fontWeight: '600', display: 'block', marginBottom: '2px' }}>Responsible</label>
+                                <input
+                                  type="text"
+                                  value={action.responsiblePerson}
+                                  onChange={(e) => handleLocalActionChange('PA', idx, 'responsiblePerson', e.target.value)}
+                                  placeholder="Name"
+                                  style={{ width: '100%', padding: '6px', border: '1px solid var(--color-gray-300)', borderRadius: '4px', outline: 'none' }}
+                                />
+                              </div>
+                              <div>
+                                <label style={{ fontWeight: '600', display: 'block', marginBottom: '2px' }}>Target Date</label>
+                                <input
+                                  type="date"
+                                  value={formatDateForInput(action.targetDate)}
+                                  onChange={(e) => handleLocalActionChange('PA', idx, 'targetDate', e.target.value)}
+                                  style={{ width: '100%', padding: '5px', border: '1px solid var(--color-gray-300)', borderRadius: '4px', outline: 'none' }}
+                                />
+                              </div>
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                              <div>
+                                <label style={{ fontWeight: '600', display: 'block', marginBottom: '2px' }}>Status</label>
+                                <select
+                                  value={action.status}
+                                  onChange={(e) => handleLocalActionChange('PA', idx, 'status', e.target.value)}
+                                  style={{ width: '100%', padding: '6px', border: '1px solid var(--color-gray-300)', borderRadius: '4px', outline: 'none', background: '#fff' }}
+                                >
+                                  <option value="Pending">Pending</option>
+                                  <option value="In Progress">In Progress</option>
+                                  <option value="Completed">Completed</option>
+                                </select>
+                              </div>
+                              <div>
+                                <label style={{ fontWeight: '600', display: 'block', marginBottom: '2px' }}>Completion Date</label>
+                                <input
+                                  type="date"
+                                  disabled={action.status !== 'Completed'}
+                                  value={formatDateForInput(action.completionDate)}
+                                  onChange={(e) => handleLocalActionChange('PA', idx, 'completionDate', e.target.value)}
+                                  style={{ width: '100%', padding: '5px', border: '1px solid var(--color-gray-300)', borderRadius: '4px', outline: 'none', background: action.status === 'Completed' ? '#fff' : '#e2e8f0' }}
+                                />
+                              </div>
+                            </div>
+
+                            <div>
+                              <label style={{ fontWeight: '600', display: 'block', marginBottom: '2px' }}>Remarks</label>
+                              <input
+                                type="text"
+                                value={action.remarks}
+                                onChange={(e) => handleLocalActionChange('PA', idx, 'remarks', e.target.value)}
+                                placeholder="Verification remarks..."
+                                style={{ width: '100%', padding: '6px', border: '1px solid var(--color-gray-300)', borderRadius: '4px', outline: 'none' }}
+                              />
+                            </div>
+
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '600', marginTop: '4px', cursor: 'pointer' }}>
+                              <input
+                                type="checkbox"
+                                checked={action.isMandatory}
+                                onChange={(e) => handleLocalActionChange('PA', idx, 'isMandatory', e.target.checked)}
+                                style={{ width: '14px', height: '14px' }}
+                              />
+                              Mandatory Action (Required for closure)
+                            </label>
+                          </div>
+                        </div>
+                      ))}
+
+                      <button
+                        type="button"
+                        onClick={() => handleAddLocalAction('PA')}
+                        className="btn btn-secondary btn-sm"
+                        style={{ borderStyle: 'dashed', borderWidth: '2px', background: 'transparent' }}
+                      >
+                        + Add New Preventive Action
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 3. Management Bypass Override */}
+              {hasRole('admin', 'dept_head') && (
+                <div style={{ padding: '20px', border: '1px solid var(--color-gray-200)', borderRadius: '8px', background: '#fff' }}>
+                  <h3 style={{ fontSize: '15px', fontWeight: '700', color: 'var(--color-navy-900)', borderBottom: '2px solid var(--color-gray-200)', paddingBottom: '8px', marginBottom: '16px' }}>
+                    3. Management Bypass Override
+                  </h3>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13.5px', fontWeight: '600', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={capaBypassApproved}
+                      onChange={(e) => setCapaBypassApproved(e.target.checked)}
+                      style={{ width: '18px', height: '18px', accentColor: 'var(--color-primary-600)' }}
+                    />
+                    Approve CAPA Bypass (Allows incident closure even if mandatory CAPAs are pending)
+                  </label>
+                </div>
+              )}
             </div>
           )}
 

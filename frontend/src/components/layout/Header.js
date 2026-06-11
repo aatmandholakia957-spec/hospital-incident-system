@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import api from '@/lib/api';
-import { Bell, Menu, LogOut, AlertTriangle, Info, CheckCircle } from 'lucide-react';
+import { Bell, Menu, LogOut, AlertTriangle, Info, CheckCircle, CalendarClock } from 'lucide-react';
 
 function timeAgo(dateStr) {
   const now = new Date();
@@ -19,6 +19,29 @@ function timeAgo(dateStr) {
   return `${days}d ago`;
 }
 
+function formatReminderDueDate(dateStr) {
+  const date = new Date(dateStr);
+  const now = new Date();
+  
+  const d1 = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const d2 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  
+  const diffTime = d1 - d2;
+  const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+  
+  const dateOptions = { month: 'short', day: 'numeric', year: 'numeric' };
+  const formattedDate = date.toLocaleDateString('en-US', dateOptions);
+
+  if (diffDays === 0) {
+    return `Due today (${formattedDate})`;
+  } else if (diffDays < 0) {
+    const absDays = Math.abs(diffDays);
+    return `Overdue by ${absDays} day${absDays > 1 ? 's' : ''} (${formattedDate})`;
+  } else {
+    return `Due in ${diffDays} day${diffDays > 1 ? 's' : ''} (${formattedDate})`;
+  }
+}
+
 export default function Header({ title, subtitle, onMenuToggle }) {
   const { user, logout } = useAuth();
   const router = useRouter();
@@ -27,16 +50,35 @@ export default function Header({ title, subtitle, onMenuToggle }) {
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef(null);
 
+  const [reminders, setReminders] = useState([]);
+  const [showReminders, setShowReminders] = useState(false);
+  const remindersDropdownRef = useRef(null);
+
+  const isAuthorizedForReminders = user && (user.role === 'admin' || user.role === 'dept_head');
+
   useEffect(() => {
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 30000);
-    return () => clearInterval(interval);
-  }, []);
+    const notificationInterval = setInterval(fetchNotifications, 30000);
+
+    let remindersInterval = null;
+    if (isAuthorizedForReminders) {
+      fetchReminders();
+      remindersInterval = setInterval(fetchReminders, 30000);
+    }
+
+    return () => {
+      clearInterval(notificationInterval);
+      if (remindersInterval) clearInterval(remindersInterval);
+    };
+  }, [user, isAuthorizedForReminders]);
 
   useEffect(() => {
     function handleClickOutside(event) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setShowDropdown(false);
+      }
+      if (remindersDropdownRef.current && !remindersDropdownRef.current.contains(event.target)) {
+        setShowReminders(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -51,6 +93,37 @@ export default function Header({ title, subtitle, onMenuToggle }) {
         setUnreadCount(data.unreadCount);
       }
     } catch {}
+  };
+
+  const fetchReminders = async () => {
+    try {
+      const data = await api.get('/api/incidents/reminders');
+      if (data.success) {
+        setReminders(data.data);
+      }
+    } catch {}
+  };
+
+  const handleMarkAudited = async (id) => {
+    try {
+      const res = await api.patch(`/api/incidents/${id}/audit`);
+      if (res.success) {
+        fetchReminders();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleMarkReaudited = async (id) => {
+    try {
+      const res = await api.patch(`/api/incidents/${id}/reaudit`);
+      if (res.success) {
+        fetchReminders();
+      }
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const markAsRead = async (id) => {
@@ -77,6 +150,10 @@ export default function Header({ title, subtitle, onMenuToggle }) {
 
   const initials = user?.name ? user.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) : '?';
 
+  const overdueReminders = reminders.filter(r => r.isOverdue);
+  const upcomingReminders = reminders.filter(r => !r.isOverdue);
+  const overdueCount = overdueReminders.length;
+
   return (
     <header className="header">
       <div className="header-left">
@@ -92,8 +169,135 @@ export default function Header({ title, subtitle, onMenuToggle }) {
       <div className="header-right">
         <div className="live-dot" title="Connected — Auto-refreshing" />
 
+        {/* Reminders Button and Dropdown */}
+        {isAuthorizedForReminders && (
+          <div ref={remindersDropdownRef} style={{ position: 'relative' }}>
+            <button 
+              className={`header-notification ${showReminders ? 'active' : ''}`}
+              onClick={() => {
+                setShowReminders(!showReminders);
+                setShowDropdown(false);
+              }}
+              title="Audit Reminders"
+            >
+              <CalendarClock size={20} />
+              {overdueCount > 0 && (
+                <span className="notification-badge notification-badge--danger">
+                  {overdueCount}
+                </span>
+              )}
+            </button>
+
+            {showReminders && (
+              <div className="notification-dropdown reminders-dropdown">
+                <div className="notification-dropdown-header">
+                  <div>
+                    <h3 style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <CalendarClock size={16} className="text-primary" />
+                      Audit Reminders
+                    </h3>
+                    <p style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                      Post-closure verification tasks
+                    </p>
+                  </div>
+                </div>
+
+                <div className="notification-list" style={{ maxHeight: '380px' }}>
+                  {reminders.length === 0 ? (
+                    <div style={{ padding: '32px 24px', textAlign: 'center', color: '#94a3b8' }}>
+                      <CheckCircle size={32} style={{ margin: '0 auto 12px', color: '#cbd5e1' }} />
+                      <p style={{ fontSize: '13px', fontWeight: '500' }}>All Caught Up!</p>
+                      <p style={{ fontSize: '11px', marginTop: '4px' }}>No active or upcoming audit reminders.</p>
+                    </div>
+                  ) : (
+                    <>
+                      {overdueReminders.length > 0 && (
+                        <div className="reminder-section">
+                          <div className="reminder-section-title overdue">
+                            <span>Overdue Reminders ({overdueReminders.length})</span>
+                          </div>
+                          {overdueReminders.map((reminder) => (
+                            <div key={`${reminder._id}-${reminder.type}`} className="reminder-item overdue">
+                              <div className="reminder-item-main" onClick={() => {
+                                router.push(`/incidents/${reminder._id}?tab=capa`);
+                                setShowReminders(false);
+                              }}>
+                                <div className="reminder-incident-id">{reminder.incidentId}</div>
+                                <div className="reminder-meta">
+                                  <span className="reminder-dept">{reminder.department}</span>
+                                  <span className="reminder-type-badge">{reminder.type}</span>
+                                </div>
+                                <div className="reminder-due-date overdue">
+                                  {formatReminderDueDate(reminder.dueDate)}
+                                </div>
+                              </div>
+                              <button 
+                                className="reminder-action-btn"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (reminder.type === '1st Audit') {
+                                    handleMarkAudited(reminder._id);
+                                  } else {
+                                    handleMarkReaudited(reminder._id);
+                                  }
+                                }}
+                                title="Mark Completed"
+                              >
+                                <CheckCircle size={16} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {upcomingReminders.length > 0 && (
+                        <div className="reminder-section">
+                          <div className="reminder-section-title upcoming">
+                            <span>Upcoming Reminders ({upcomingReminders.length})</span>
+                          </div>
+                          {upcomingReminders.map((reminder) => (
+                            <div key={`${reminder._id}-${reminder.type}`} className="reminder-item upcoming">
+                              <div className="reminder-item-main" onClick={() => {
+                                router.push(`/incidents/${reminder._id}?tab=capa`);
+                                setShowReminders(false);
+                              }}>
+                                <div className="reminder-incident-id">{reminder.incidentId}</div>
+                                <div className="reminder-meta">
+                                  <span className="reminder-dept">{reminder.department}</span>
+                                  <span className="reminder-type-badge">{reminder.type}</span>
+                                </div>
+                                <div className="reminder-due-date upcoming">
+                                  {formatReminderDueDate(reminder.dueDate)}
+                                </div>
+                              </div>
+                              <button 
+                                className="reminder-action-btn"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (reminder.type === '1st Audit') {
+                                    handleMarkAudited(reminder._id);
+                                  } else {
+                                    handleMarkReaudited(reminder._id);
+                                  }
+                                }}
+                                title="Mark Completed"
+                              >
+                                <CheckCircle size={16} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         <div ref={dropdownRef} style={{ position: 'relative' }}>
-          <button className="header-notification" onClick={() => setShowDropdown(!showDropdown)}>
+          <button className="header-notification" onClick={() => { setShowDropdown(!showDropdown); setShowReminders(false); }}>
             <Bell size={20} />
             {unreadCount > 0 && <span className="notification-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>}
           </button>

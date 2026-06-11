@@ -95,6 +95,42 @@ const incidentSchema = new mongoose.Schema(
     reviewedBySign: { type: String, default: '' },
     reviewedByDate: { type: Date, default: null },
     reviewedByTime: { type: String, default: '' },
+
+    // Investigation & CAPA Module additions
+    investigations: [
+      {
+        text: { type: String, required: true },
+        date: { type: Date, default: Date.now },
+        user: { type: String, required: true },
+      }
+    ],
+    correctiveActions: [
+      {
+        description: { type: String, required: true },
+        responsiblePerson: { type: String, default: '' },
+        targetDate: { type: Date, default: null },
+        status: { type: String, enum: ['Pending', 'In Progress', 'Completed'], default: 'Pending' },
+        completionDate: { type: Date, default: null },
+        remarks: { type: String, default: '' },
+        isMandatory: { type: Boolean, default: true },
+      }
+    ],
+    preventiveActions: [
+      {
+        description: { type: String, required: true },
+        responsiblePerson: { type: String, default: '' },
+        targetDate: { type: Date, default: null },
+        status: { type: String, enum: ['Pending', 'In Progress', 'Completed'], default: 'Pending' },
+        completionDate: { type: Date, default: null },
+        remarks: { type: String, default: '' },
+        isMandatory: { type: Boolean, default: true },
+      }
+    ],
+    capaBypassApproved: { type: Boolean, default: false },
+    auditDone: { type: Boolean, default: false },
+    auditDate: { type: Date, default: null },
+    reauditDone: { type: Boolean, default: false },
+    reauditDate: { type: Date, default: null },
   },
   { timestamps: true }
 );
